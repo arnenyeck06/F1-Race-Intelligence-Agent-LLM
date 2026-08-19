@@ -1,3 +1,9 @@
+"""
+rag.py
+F1 Race Intelligence Agent — tool-calling loop + Anthropic.
+Includes query rewriting and document re-ranking.
+"""
+
 import json
 import os
 import anthropic
@@ -27,69 +33,21 @@ Always:
 Be concise and precise like an F1 analyst."""
 
 TOOLS = [
-    {
-        "name": "get_race_sessions",
-        "description": "List all race sessions for a given year",
-        "input_schema": {
-            "type": "object",
-            "properties": {"year": {"type": "integer"}},
-            "required": ["year"]
-        }
-    },
-    {
-        "name": "find_session",
-        "description": "Find a race session by country or meeting name",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "country": {"type": "string"},
-                "meeting_name": {"type": "string"},
-                "year": {"type": "integer"}
-            }
-        }
-    },
-    {
-        "name": "get_fastest_laps",
-        "description": "Get the fastest laps for a race session",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "session_key": {"type": "integer"},
-                "top_n": {"type": "integer"}
-            },
-            "required": ["session_key"]
-        }
-    },
-    {
-        "name": "get_pit_stops",
-        "description": "Get all pit stops for a race session",
-        "input_schema": {
-            "type": "object",
-            "properties": {"session_key": {"type": "integer"}},
-            "required": ["session_key"]
-        }
-    },
-    {
-        "name": "get_race_result",
-        "description": "Get final race positions for a session",
-        "input_schema": {
-            "type": "object",
-            "properties": {"session_key": {"type": "integer"}},
-            "required": ["session_key"]
-        }
-    },
-    {
-        "name": "get_driver_laps",
-        "description": "Get all laps for a specific driver in a session",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "session_key": {"type": "integer"},
-                "driver_name": {"type": "string"}
-            },
-            "required": ["session_key", "driver_name"]
-        }
-    }
+    {"name": "get_race_sessions", "description": "List all race sessions for a given year",
+     "input_schema": {"type": "object", "properties": {"year": {"type": "integer"}}, "required": ["year"]}},
+    {"name": "find_session", "description": "Find a race session by country or meeting name",
+     "input_schema": {"type": "object", "properties": {
+         "country": {"type": "string"}, "meeting_name": {"type": "string"}, "year": {"type": "integer"}}}},
+    {"name": "get_fastest_laps", "description": "Get the fastest laps for a race session",
+     "input_schema": {"type": "object", "properties": {
+         "session_key": {"type": "integer"}, "top_n": {"type": "integer"}}, "required": ["session_key"]}},
+    {"name": "get_pit_stops", "description": "Get all pit stops for a race session",
+     "input_schema": {"type": "object", "properties": {"session_key": {"type": "integer"}}, "required": ["session_key"]}},
+    {"name": "get_race_result", "description": "Get final race positions for a session",
+     "input_schema": {"type": "object", "properties": {"session_key": {"type": "integer"}}, "required": ["session_key"]}},
+    {"name": "get_driver_laps", "description": "Get all laps for a specific driver in a session",
+     "input_schema": {"type": "object", "properties": {
+         "session_key": {"type": "integer"}, "driver_name": {"type": "string"}}, "required": ["session_key", "driver_name"]}},
 ]
 
 TOOL_MAP = {
@@ -104,15 +62,19 @@ TOOL_MAP = {
 
 def run_agent(query: str, verbose: bool = False) -> dict:
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    messages = [{"role": "user", "content": query}]
+
+    # Step 1: Query rewriting
+    from agent.query_rewriter import rewrite_query
+    rewritten = rewrite_query(query, use_llm=False)
+    if verbose and rewritten != query:
+        print(f"[rewriter] {query} → {rewritten}")
+
+    messages = [{"role": "user", "content": rewritten}]
 
     while True:
         response = client.messages.create(
-            model=MODEL,
-            max_tokens=2000,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=messages,
+            model=MODEL, max_tokens=2000,
+            system=SYSTEM_PROMPT, tools=TOOLS, messages=messages,
         )
 
         if verbose:
@@ -122,13 +84,13 @@ def run_agent(query: str, verbose: bool = False) -> dict:
 
         if response.stop_reason == "end_turn":
             answer = " ".join(
-                block.text for block in response.content
-                if hasattr(block, "text")
+                block.text for block in response.content if hasattr(block, "text")
             )
             return {
                 "answer": answer,
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
+                "rewritten_query": rewritten,
             }
 
         tool_results = []
@@ -136,15 +98,12 @@ def run_agent(query: str, verbose: bool = False) -> dict:
             if block.type != "tool_use":
                 continue
             tool_fn = TOOL_MAP.get(block.name)
-            if not tool_fn:
-                result = {"error": f"Unknown tool: {block.name}"}
-            else:
-                try:
-                    result = tool_fn(**block.input)
-                    if verbose:
-                        print(f"[tool] {block.name}({block.input})")
-                except Exception as e:
-                    result = {"error": str(e)}
+            try:
+                result = tool_fn(**block.input) if tool_fn else {"error": f"Unknown tool: {block.name}"}
+                if verbose:
+                    print(f"[tool] {block.name}({block.input})")
+            except Exception as e:
+                result = {"error": str(e)}
 
             tool_results.append({
                 "type": "tool_result",

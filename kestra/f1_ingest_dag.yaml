@@ -1,0 +1,28 @@
+id: f1_race_ingest
+namespace: f1_intelligence
+description: Ingest F1 race data after each race weekend
+
+triggers:
+  - id: weekly_schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 18 * * 0"  # Every Sunday at 18:00 UTC (after race finish)
+
+tasks:
+  - id: ingest_latest_race
+    type: io.kestra.plugin.scripts.python.Script
+    script: |
+      import subprocess
+      import datetime
+      year = datetime.datetime.now().year
+      subprocess.run(["python", "ingest.py", "--year", str(year)], check=True)
+      subprocess.run(["python", "ingestion/fix_meeting_names.py", "--year", str(year)], check=True)
+
+  - id: ingest_text_chunks
+    type: io.kestra.plugin.scripts.python.Script
+    script: |
+      import subprocess
+      subprocess.run(["python", "ingest_text.py"], check=True)
+
+  - id: notify_success
+    type: io.kestra.plugin.core.log.Log
+    message: "F1 data ingestion complete for latest race weekend."
