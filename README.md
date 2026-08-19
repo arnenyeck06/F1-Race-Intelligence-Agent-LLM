@@ -1,114 +1,126 @@
-# Earnings Intelligence Platform
+# 🏎️ F1 Race Intelligence Agent
 
-A hybrid RAG assistant for querying SEC EDGAR filings — 10-Ks, 10-Qs, and earnings call transcripts — in plain English. Built as the capstone project for [DataTalks.Club LLM Zoomcamp 2026](https://github.com/DataTalksClub/llm-zoomcamp).
+> Ask natural-language questions about the 2024 Formula 1 season — powered by real race data, hybrid RAG search.
 
-## Problem
+---
 
-Public company filings contain the information investors and analysts need — margins, risk factors, forward guidance, segment performance — but it's buried across hundreds of pages per filing, repeated quarter over quarter, in dense financial language. Finding a specific fact (e.g. "what did NVIDIA say about data center revenue growth in Q3 2023?") means manually searching PDFs or EDGAR's own interface.
+## What it does
 
-This platform lets a user ask a natural-language question and get a grounded answer sourced directly from the underlying filings, using retrieval that combines keyword and semantic search rather than plain "control-F."
+This agent answers questions about the 2024 F1 season by combining:
+- **Structured race data** (lap times, pit stops, positions) from the OpenF1 API
+- **Text search** over Wikipedia race summaries and F1 regulations
+- **Claude AI** with tool-calling to reason across both data sources
 
-**Corpus:** 1,842 chunks from 10-K/10-Q filings and earnings transcripts for AAPL, MSFT, NVDA, GOOGL, and META, spanning 2019–2023, sourced from SEC EDGAR.
+### Example questions
+- *"Who won the Monaco Grand Prix 2024?"*
+- *"What were Hamilton's fastest laps at Silverstone?"*
+- *"How many pit stops did Ferrari make in Bahrain?"*
+- *"What is DRS and when can drivers use it?"*
+- *"Compare Red Bull and McLaren lap times at the British GP"*
+
+---
+
+## Run it locally (5 steps)
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — for Postgres
+- Python 3.12+
+- An [Anthropic API key](https://console.anthropic.com/settings/keys)
+
+### Step 1 — Clone and configure
+```bash
+git clone https://github.com/arnenyeck06/F1-Race-Intelligence-Agent-LLM.git
+cd F1-Race-Intelligence-Agent-LLM
+cp .env.example .env
+```
+Open `.env` and add your Anthropic API key:
+```
+ANTHROPIC_API_KEY=your-key-here
+```
+
+### Step 2 — Start the database
+```bash
+docker compose up -d
+```
+This starts Postgres + pgvector on port 5433.
+
+### Step 3 — Install dependencies and download model
+```bash
+pip install -r requirements.txt
+python ingestion/download_model.py
+```
+The ONNX embedding model is ~90MB — downloads once.
+
+### Step 4 — Ingest 2024 season data
+```bash
+python ingest.py --year 2024
+python ingestion/fix_meeting_names.py --year 2024
+python ingest_text.py
+```
+This fetches race data from OpenF1 and Wikipedia. Takes ~10 minutes due to API rate limits.
+
+### Step 5 — Launch the app
+```bash
+export TOKENIZERS_PARALLELISM=false
+export $(cat .env | xargs)
+streamlit run app.py
+```
+Open **http://localhost:8501** in your browser.
+
+---
+
+## How to use the app
+
+| Tab | What you get |
+|-----|-------------|
+| 🏆 Race Result | Full classification + podium for any 2024 race |
+| ⚡ Fastest Laps | Top lap times per race |
+| 🔧 Pit Stops | All pit stop durations and timing |
+| 💬 Ask Agent | Type any F1 question — Claude answers from real data |
+
+Use the **race selector** in the left sidebar to switch between any of the 30 sessions from the 2024 season.
+
+To ask a question: click the **💬 Ask Agent** tab → type your question or pick an example → click **ASK AGENT**.
+
+---
 
 ## Architecture
 
 ```
-EDGAR API → Ingestion (parser + chunker) → Embedder → pgvector (Postgres)
-                                                      ↘
-                                          MinSearch (lexical) ─┐
-                                          pgvector (semantic) ─┼→ RRF fusion → LLM → Answer
-                                                              ┘
-                                     FastAPI ⇄ Streamlit UI
+OpenF1 API ──────────────────→ Postgres (laps, pit stops, positions)
+Wikipedia API ────────────────→ pgvector (race summaries, regulations)
+                                        ↓
+                        Hybrid RRF Search (BM25 + cosine similarity)
+                                        ↓
+                        Claude Agent (tool-calling loop)
+                                        ↓
+                              Streamlit UI
 ```
 
-## Retrieval Flow
+## Stack
 
-1. **Lexical retrieval** — [MinSearch](https://github.com/alexeygrigorev/minsearch) over filing text
-2. **Semantic retrieval** — embeddings stored in **pgvector** (Postgres)
-3. **Hybrid fusion** — [Reciprocal Rank Fusion (RRF)](https://en.wikipedia.org/wiki/Reciprocal_rank_fusion) combines both ranked lists
-4. Top hybrid results are passed as context to the LLM, which generates a grounded, sourced answer
+| Layer | Technology |
+|-------|-----------|
+| Race data | OpenF1 API (free, no auth) |
+| Text data | Wikipedia API |
+| Database | Postgres + pgvector |
+| Keyword search | minsearch (TF-IDF) |
+| Vector search | ONNX (Xenova/all-MiniLM-L6-v2, 384-dim) |
+| Hybrid search | Reciprocal Rank Fusion (RRF) |
+| LLM | Claude Sonnet |
+| Interface | Streamlit |
 
-## Retrieval Evaluation
+## Data sources
 
-| Approach | Hit Rate | MRR |
-|---|---|---|
-| **Hybrid (RRF)** | **0.3678** | **0.2065** |
-| Lexical only | _[fill in]_ | _[fill in]_ |
-| Semantic only | _[fill in]_ | _[fill in]_ |
+All data is free and publicly available — no special access needed:
+- [OpenF1 API](https://openf1.org) — live and historical F1 race data
+- [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) — race summaries and regulations
 
-Hybrid retrieval was selected for production based on these results.
+## Knowledge base
 
-## LLM Evaluation
-
-LLM-as-judge scoring on relevance and faithfulness (1–5 scale) across candidate prompts:
-
-| Prompt | Relevance | Faithfulness |
-|---|---|---|
-| **Prompt A (selected)** | **4.4** | **4.933** |
-| Prompt B | _[fill in]_ | _[fill in]_ |
-
-## Interface
-
-- **FastAPI** backend exposing the RAG pipeline as an API
-- **Streamlit** UI with dropdowns for company/ticker and filing period selection
-
-![UI screenshot](docs/ui-screenshot.png)
-*(drop a screenshot at `docs/ui-screenshot.png` — see checklist below)*
-
-## Ingestion Pipeline
-
-Semi-automated ingestion via Python scripts: EDGAR client → parser → embedder → pgvector upsert.
-
-## Best Practices Implemented
-
-- ✅ Hybrid search (lexical + semantic, evaluated head-to-head)
-- ⬜ Document re-ranking
-- ⬜ Query rewriting
-
-## Getting Started
-
-### Prerequisites
-- Python _[your version]_
-- Postgres with the `pgvector` extension
-- OpenAI (or your chosen LLM provider) API key
-
-### Setup
-```bash
-git clone https://github.com/arnenyeck06/earnings-intelligence.git
-cd earnings-intelligence
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt   # or: uv sync, if using uv
-cp .env.example .env              # fill in your API key and DB connection string
-```
-
-### Ingest data
-```bash
-python ingest.py   # adjust to your actual script name
-```
-
-### Run the API
-```bash
-uvicorn main:app --reload   # adjust module path if different
-```
-
-### Run the UI
-```bash
-streamlit run ui/app.py   # adjust path if different
-```
-
-## Project Status
-
-| Phase | Status |
-|---|---|
-| Ingestion pipeline | ✅ Complete |
-| Hybrid retrieval (RRF) | ✅ Complete |
-| Retrieval evaluation | ✅ Complete |
-| LLM evaluation | ✅ Complete |
-| FastAPI + Streamlit interface | ✅ Complete |
-| Docker Compose | 🔲 Planned |
-| Cloud deployment | 🔲 Planned |
-
-## Author
-
-Arne Nyeck Nyeck — [GitHub](https://github.com/arnenyeck06) · [LinkedIn](https://linkedin.com/in/arne-nyecknyeck-539369ba)
+| Source | Records |
+|--------|---------|
+| Race sessions (2024) | 30 sessions |
+| Lap times | ~30,000 laps |
+| Pit stops | ~500 pit stops |
+| Text chunks | 214 chunks (21 Wikipedia articles) |
