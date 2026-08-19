@@ -6,7 +6,7 @@
 
 ## 🚀 Try It Live
 
-**→ [Click here to try the live demo](https://your-app.streamlit.app)** *(deploy to Streamlit Cloud to activate)*
+
 
 ### How to ask a question:
 1. Open the app
