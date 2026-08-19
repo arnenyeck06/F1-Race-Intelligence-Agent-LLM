@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 Race Intelligence Agent</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #e10600;
+    --red-dark: #a00400;
+    --bg: #080808;
+    --bg1: #111111;
+    --bg2: #1a1a1a;
+    --bg3: #222222;
+    --border: #2a2a2a;
+    --text: #ffffff;
+    --muted: #888888;
+    --dim: #444444;
+    --ferrari: #dc143c;
+    --mclaren: #ff8000;
+    --redbull: #3671c6;
+    --mercedes: #00d2be;
+    --alpine: #ff87bc;
+    --aston: #358c75;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; overflow-x: hidden; }
+
+  /* LAYOUT */
+  .shell { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: 56px 1fr; height: 100vh; }
+
+  /* TOPBAR */
+  .topbar {
+    grid-column: 1 / -1;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 24px;
+  }
+  .topbar-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; color: var(--red); letter-spacing: 4px; }
+  .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; }
+  .topbar-spacer { flex: 1; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #22cc55; animation: pulse 2s infinite; margin-right: 6px; display: inline-block; }
+  .live-label { font-size: 11px; color: #22cc55; letter-spacing: 2px; text-transform: uppercase; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+  }
+  .sidebar-label { font-size: 10px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; margin-top: 16px; }
+  .sidebar-label:first-child { margin-top: 0; }
+
+  select {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Barlow', sans-serif;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+  select:focus { border-color: var(--red); }
+
+  .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin-top: 4px; }
+  .meta-k { font-size: 11px; color: var(--muted); }
+  .meta-v { font-size: 11px; color: var(--text); font-weight: 600; text-align: right; }
+  .badge-race { display: inline-block; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; padding: 3px 10px; border-radius: 3px; letter-spacing: 2px; margin-top: 4px; }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* MAIN */
+  .main { background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TABS */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg1); flex-shrink: 0; }
+  .tab {
+    padding: 14px 22px;
+    font-size: 11px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: #ccc; }
+  .tab.active { color: var(--red); border-bottom-color: var(--red); }
+
+  /* CONTENT */
+  .content { flex: 1; padding: 24px; overflow-y: auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* SECTION TITLE */
+  .section-title { font-size: 10px; color: var(--dim); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 16px; }
+
+  /* PODIUM */
+  .podium { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .pod { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+  .pod.p1 { border-color: var(--red); background: #1a0000; }
+  .pod-pos { font-family: 'Barlow Condensed', sans-serif; font-size: 36px; font-weight: 900; color: var(--red); line-height: 1; }
+  .pod.p2 .pod-pos { color: #aaa; }
+  .pod.p3 .pod-pos { color: #b87333; }
+  .pod-name { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); margin-top: 6px; letter-spacing: 1px; }
+  .pod-team { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* TABLE */
+  .race-table { width: 100%; border-collapse: collapse; }
+  .race-table th { font-size: 10px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .race-table td { font-size: 13px; color: #ccc; padding: 9px 12px; border-bottom: 1px solid #161616; }
+  .race-table tr:hover td { background: #141414; }
+  .pos-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; }
+  .pos-num.p2 { background: #aaa; color: #000; }
+  .pos-num.p3 { background: #b87333; color: #000; }
+  .pos-num.other { background: var(--bg3); color: var(--muted); }
+  .team-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .5px; }
+  .tag-ferrari { background: #dc143c20; color: var(--ferrari); }
+  .tag-mclaren { background: #ff800020; color: var(--mclaren); }
+  .tag-redbull { background: #3671c620; color: var(--redbull); }
+  .tag-mercedes { background: #00d2be20; color: var(--mercedes); }
+  .tag-other { background: var(--bg3); color: var(--muted); }
+
+  /* BARS */
+  .lap-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .lap-bar { height: 3px; background: var(--red); border-radius: 2px; display: inline-block; }
+  .lap-time { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); min-width: 64px; }
+
+  /* AGENT TAB */
+  .ask-wrap { background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  .ask-row { display: flex; gap: 10px; }
+  .ask-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 11px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: 'Barlow', sans-serif;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .ask-input:focus { border-color: var(--red); }
+  .ask-btn {
+    background: var(--red);
+    color: #fff;
+    border: none;
+    padding: 0 20px;
+    border-radius: 6px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  .ask-btn:hover { background: var(--red-dark); }
+  .ask-btn:disabled { background: var(--dim); cursor: not-allowed; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: 'Barlow', sans-serif;
+  }
+  .chip:hover { border-color: var(--red); color: var(--text); }
+
+  .answer-box { background: #0d0000; border-left: 3px solid var(--red); border-radius: 0 8px 8px 0; padding: 16px 20px; font-size: 14px; line-height: 1.8; color: #eee; margin-top: 16px; display: none; }
+  .answer-box.visible { display: block; }
+  .answer-meta { display: flex; gap: 20px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+  .spinner { display: none; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin-top: 14px; letter-spacing: 1px; }
+  .spinner.visible { display: flex; }
+  .spin-ring { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* METRICS */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .metric-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+  .metric-val { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700; color: var(--text); }
+  .metric-sub { font-size: 11px; color: var(--red); margin-top: 2px; }
+
+  /* FOOTER */
+  .footer { border-top: 1px solid var(--border); padding: 12px 24px; display: flex; gap: 24px; background: var(--bg1); flex-shrink: 0; }
+  .footer-item { font-size: 10px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <span class="topbar-logo">F1</span>
+    <span class="topbar-title">Race Intelligence Agent</span>
+    <div class="topbar-spacer"></div>
+    <span class="live-dot"></span>
+    <span class="live-label">2024 Season</span>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-label">Select Race</div>
+    <select id="raceSelect" onchange="switchRace(this.value)">
+      <option value="monaco">Monaco Grand Prix</option>
+      <option value="silverstone">British Grand Prix</option>
+      <option value="bahrain">Bahrain Grand Prix</option>
+      <option value="monza">Italian Grand Prix</option>
+      <option value="spa">Belgian Grand Prix</option>
+    </select>
+
+    <hr class="divider">
+
+    <div class="sidebar-label">Session Info</div>
+    <div class="meta-grid">
+      <span class="meta-k">Circuit</span><span class="meta-v" id="meta-circuit">Monte Carlo</span>
+      <span class="meta-k">Country</span><span class="meta-v" id="meta-country">Monaco</span>
+      <span class="meta-k">Date</span><span class="meta-v" id="meta-date">26 May 2024</span>
+      <span class="meta-k">Round</span><span class="meta-v" id="meta-round">Round 8</span>
+      <span class="meta-k">Laps</span><span class="meta-v" id="meta-laps">78</span>
+    </div>
+    <div style="margin-top:10px"><span class="badge-race">RACE</span></div>
+
+    <hr class="divider">
+
+    <div class="sidebar-label">Quick Stats</div>
+    <div class="meta-grid">
+      <span class="meta-k">Winner</span><span class="meta-v" id="meta-winner">C. Leclerc</span>
+      <span class="meta-k">Fastest</span><span class="meta-v" id="meta-fastest">L. Hamilton</span>
+      <span class="meta-k">Pit Stops</span><span class="meta-v" id="meta-pits">7</span>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <nav class="tabs">
+      <div class="tab active" onclick="showTab('result', this)">🏆 Race Result</div>
+      <div class="tab" onclick="showTab('laps', this)">⚡ Fastest Laps</div>
+      <div class="tab" onclick="showTab('pits', this)">🔧 Pit Stops</div>
+      <div class="tab" onclick="showTab('agent', this)">💬 Ask Agent</div>
+    </nav>
+
+    <div class="content">
+
+      <!-- RESULT -->
+      <div class="panel active" id="panel-result">
+        <div class="podium" id="podium"></div>
+        <div class="section-title">Full Classification</div>
+        <table class="race-table">
+          <thead><tr><th>Pos</th><th>Driver</th><th>Team</th></tr></thead>
+          <tbody id="result-body"></tbody>
+        </table>
+      </div>
+
+      <!-- LAPS -->
+      <div class="panel" id="panel-laps">
+        <div class="section-title">Fastest Laps</div>
+        <table class="race-table">
+          <thead><tr><th>#</th><th>Driver</th><th>Lap</th><th>Time</th><th>Pace</th></tr></thead>
+          <tbody id="laps-body"></tbody>
+        </table>
+      </div>
+
+      <!-- PIT STOPS -->
+      <div class="panel" id="panel-pits">
+        <div class="metrics" id="pit-metrics"></div>
+        <div class="section-title">Pit Stop Log</div>
+        <table class="race-table">
+          <thead><tr><th>Driver</th><th>Team</th><th>Lap</th><th>Duration</th></tr></thead>
+          <tbody id="pits-body"></tbody>
+        </table>
+      </div>
+
+      <!-- AGENT -->
+      <div class="panel" id="panel-agent">
+        <div class="ask-wrap">
+          <div class="section-title">Ask the F1 Agent</div>
+          <div class="ask-row">
+            <input class="ask-input" id="askInput" placeholder="e.g. Who won Monaco 2024?" onkeydown="if(event.key==='Enter')askAgent()">
+            <button class="ask-btn" id="askBtn" onclick="askAgent()">Ask ↗</button>
+          </div>
+          <div class="chips" id="chips"></div>
+          <div class="spinner" id="spinner">
+            <div class="spin-ring"></div>
+            <span>Agent searching race data...</span>
+          </div>
+        </div>
+        <div class="answer-box" id="answerBox">
+          <div id="answerText"></div>
+          <div class="answer-meta" id="answerMeta"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer class="footer">
+      <span class="footer-item">📡 Data: OpenF1 API + Wikipedia</span>
+      <span class="footer-item">🔍 Search: Hybrid RRF (BM25 + pgvector)</span>
+      <span class="footer-item">🤖 LLM: Claude Sonnet</span>
+    </footer>
+  </main>
+
+</div>
+
+<script>
+const DATA = {
+  monaco: {
+    circuit:'Monte Carlo', country:'Monaco', date:'26 May 2024', round:'Round 8', laps:'78',
+    winner:'C. Leclerc', fastest:'L. Hamilton', pits:'7',
+    result:[
+      {pos:1,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+      {pos:2,driver:'Oscar PIASTRI',team:'McLaren',tag:'mclaren'},
+      {pos:3,driver:'Carlos SAINZ',team:'Ferrari',tag:'ferrari'},
+      {pos:4,driver:'Lando NORRIS',team:'McLaren',tag:'mclaren'},
+      {pos:5,driver:'George RUSSELL',team:'Mercedes',tag:'mercedes'},
+      {pos:6,driver:'Max VERSTAPPEN',team:'Red Bull Racing',tag:'redbull'},
+      {pos:7,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+      {pos:8,driver:'Lewis HAMILTON',team:'Mercedes',tag:'mercedes'},
+    ],
+    laps:[
+      {rank:1,driver:'L. Hamilton',lap:63,time:'1:14.165',pct:100},
+      {rank:2,driver:'L. Hamilton',lap:59,time:'1:14.204',pct:96},
+      {rank:3,driver:'L. Hamilton',lap:56,time:'1:14.423',pct:90},
+      {rank:4,driver:'C. Leclerc',lap:71,time:'1:14.891',pct:82},
+      {rank:5,driver:'O. Piastri',lap:68,time:'1:15.102',pct:76},
+    ],
+    pitstops:[
+      {driver:'C. Leclerc',team:'Ferrari',tag:'ferrari',lap:18,dur:'2.4s'},
+      {driver:'O. Piastri',team:'McLaren',tag:'mclaren',lap:19,dur:'2.6s'},
+      {driver:'L. Norris',team:'McLaren',tag:'mclaren',lap:21,dur:'2.5s'},
+      {driver:'G. Russell',team:'Mercedes',tag:'mercedes',lap:22,dur:'2.8s'},
+      {driver:'M. Verstappen',team:'Red Bull',tag:'redbull',lap:20,dur:'2.7s'},
+      {driver:'C. Sainz',team:'Ferrari',tag:'ferrari',lap:25,dur:'2.3s'},
+      {driver:'L. Hamilton',team:'Mercedes',tag:'mercedes',lap:23,dur:'2.9s'},
+    ],
+    chips:['Who won Monaco 2024?','Hamilton fastest lap time?','Ferrari pit stop strategy?','Which team had most stops?'],
+  },
+  silverstone: {
+    circuit:'Silverstone', country:'United Kingdom', date:'7 Jul 2024', round:'Round 12', laps:'52',
+    winner:'L. Hamilton', fastest:'M. Verstappen', pits:'34',
+    result:[
+      {pos:1,driver:'Lewis HAMILTON',team:'Mercedes',tag:'mercedes'},
+      {pos:2,driver:'Max VERSTAPPEN',team:'Red Bull Racing',tag:'redbull'},
+      {pos:3,driver:'Lando NORRIS',team:'McLaren',tag:'mclaren'},
+      {pos:4,driver:'Oscar PIASTRI',team:'McLaren',tag:'mclaren'},
+      {pos:5,driver:'Carlos SAINZ',team:'Ferrari',tag:'ferrari'},
+      {pos:6,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+    ],
+    laps:[
+      {rank:1,driver:'M. Verstappen',lap:45,time:'1:27.097',pct:100},
+      {rank:2,driver:'L. Hamilton',lap:48,time:'1:27.311',pct:94},
+      {rank:3,driver:'L. Norris',lap:44,time:'1:27.558',pct:88},
+      {rank:4,driver:'C. Sainz',lap:50,time:'1:27.901',pct:80},
+      {rank:5,driver:'G. Russell',lap:47,time:'1:28.102',pct:74},
+    ],
+    pitstops:[
+      {driver:'L. Hamilton',team:'Mercedes',tag:'mercedes',lap:14,dur:'2.2s'},
+      {driver:'M. Verstappen',team:'Red Bull',tag:'redbull',lap:16,dur:'2.5s'},
+      {driver:'L. Norris',team:'McLaren',tag:'mclaren',lap:15,dur:'2.4s'},
+      {driver:'C. Leclerc',team:'Ferrari',tag:'ferrari',lap:18,dur:'2.6s'},
+    ],
+    chips:['Who won Silverstone 2024?','Verstappen fastest lap time?','Hamilton pit stop lap?','McLaren vs Red Bull strategy?'],
+  },
+  bahrain: {
+    circuit:'Bahrain International', country:'Bahrain', date:'2 Mar 2024', round:'Round 1', laps:'57',
+    winner:'M. Verstappen', fastest:'C. Leclerc', pits:'43',
+    result:[
+      {pos:1,driver:'Max VERSTAPPEN',team:'Red Bull Racing',tag:'redbull'},
+      {pos:2,driver:'Sergio PEREZ',team:'Red Bull Racing',tag:'redbull'},
+      {pos:3,driver:'Carlos SAINZ',team:'Ferrari',tag:'ferrari'},
+      {pos:4,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+      {pos:5,driver:'George RUSSELL',team:'Mercedes',tag:'mercedes'},
+      {pos:6,driver:'Lando NORRIS',team:'McLaren',tag:'mclaren'},
+    ],
+    laps:[
+      {rank:1,driver:'C. Leclerc',lap:54,time:'1:32.608',pct:100},
+      {rank:2,driver:'M. Verstappen',lap:52,time:'1:32.871',pct:94},
+      {rank:3,driver:'C. Sainz',lap:53,time:'1:33.012',pct:90},
+      {rank:4,driver:'S. Perez',lap:51,time:'1:33.201',pct:84},
+      {rank:5,driver:'G. Russell',lap:49,time:'1:33.445',pct:77},
+    ],
+    pitstops:[
+      {driver:'M. Verstappen',team:'Red Bull',tag:'redbull',lap:15,dur:'2.1s'},
+      {driver:'C. Sainz',team:'Ferrari',tag:'ferrari',lap:16,dur:'2.4s'},
+      {driver:'C. Leclerc',team:'Ferrari',tag:'ferrari',lap:18,dur:'2.3s'},
+      {driver:'S. Perez',team:'Red Bull',tag:'redbull',lap:14,dur:'2.6s'},
+      {driver:'G. Russell',team:'Mercedes',tag:'mercedes',lap:20,dur:'2.8s'},
+    ],
+    chips:['Who won Bahrain 2024?','Red Bull strategy?','Leclerc fastest lap?','Ferrari vs Red Bull times?'],
+  },
+  monza: {
+    circuit:'Autodromo Nazionale', country:'Italy', date:'1 Sep 2024', round:'Round 16', laps:'53',
+    winner:'C. Leclerc', fastest:'C. Leclerc', pits:'30',
+    result:[
+      {pos:1,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+      {pos:2,driver:'Oscar PIASTRI',team:'McLaren',tag:'mclaren'},
+      {pos:3,driver:'Lando NORRIS',team:'McLaren',tag:'mclaren'},
+      {pos:4,driver:'Carlos SAINZ',team:'Ferrari',tag:'ferrari'},
+      {pos:5,driver:'Lewis HAMILTON',team:'Mercedes',tag:'mercedes'},
+      {pos:6,driver:'Max VERSTAPPEN',team:'Red Bull Racing',tag:'redbull'},
+    ],
+    laps:[
+      {rank:1,driver:'C. Leclerc',lap:50,time:'1:21.488',pct:100},
+      {rank:2,driver:'O. Piastri',lap:48,time:'1:21.712',pct:95},
+      {rank:3,driver:'L. Norris',lap:49,time:'1:21.934',pct:90},
+      {rank:4,driver:'C. Sainz',lap:47,time:'1:22.108',pct:83},
+      {rank:5,driver:'L. Hamilton',lap:51,time:'1:22.401',pct:76},
+    ],
+    pitstops:[
+      {driver:'C. Leclerc',team:'Ferrari',tag:'ferrari',lap:20,dur:'2.1s'},
+      {driver:'O. Piastri',team:'McLaren',tag:'mclaren',lap:22,dur:'2.3s'},
+      {driver:'L. Norris',team:'McLaren',tag:'mclaren',lap:21,dur:'2.4s'},
+      {driver:'M. Verstappen',team:'Red Bull',tag:'redbull',lap:19,dur:'2.6s'},
+    ],
+    chips:['Who won Monza 2024?','Leclerc fastest lap time?','Ferrari home race strategy?','McLaren pit stops?'],
+  },
+  spa: {
+    circuit:'Circuit de Spa-Francorchamps', country:'Belgium', date:'28 Jul 2024', round:'Round 14', laps:'44',
+    winner:'L. Hamilton', fastest:'L. Hamilton', pits:'34',
+    result:[
+      {pos:1,driver:'Lewis HAMILTON',team:'Mercedes',tag:'mercedes'},
+      {pos:2,driver:'George RUSSELL',team:'Mercedes',tag:'mercedes'},
+      {pos:3,driver:'Max VERSTAPPEN',team:'Red Bull Racing',tag:'redbull'},
+      {pos:4,driver:'Sergio PEREZ',team:'Red Bull Racing',tag:'redbull'},
+      {pos:5,driver:'Charles LECLERC',team:'Ferrari',tag:'ferrari'},
+      {pos:6,driver:'Lando NORRIS',team:'McLaren',tag:'mclaren'},
+    ],
+    laps:[
+      {rank:1,driver:'L. Hamilton',lap:40,time:'1:46.985',pct:100},
+      {rank:2,driver:'G. Russell',lap:38,time:'1:47.211',pct:94},
+      {rank:3,driver:'M. Verstappen',lap:39,time:'1:47.445',pct:88},
+      {rank:4,driver:'C. Leclerc',lap:37,time:'1:47.908',pct:79},
+      {rank:5,driver:'L. Norris',lap:41,time:'1:48.102',pct:73},
+    ],
+    pitstops:[
+      {driver:'L. Hamilton',team:'Mercedes',tag:'mercedes',lap:14,dur:'2.3s'},
+      {driver:'G. Russell',team:'Mercedes',tag:'mercedes',lap:15,dur:'2.4s'},
+      {driver:'M. Verstappen',team:'Red Bull',tag:'redbull',lap:16,dur:'2.2s'},
+      {driver:'C. Leclerc',team:'Ferrari',tag:'ferrari',lap:18,dur:'2.5s'},
+    ],
+    chips:['Who won Spa 2024?','Mercedes 1-2 strategy?','Hamilton fastest lap?','Verstappen pit stops?'],
+  },
+};
+
+const API_URL = 'http://localhost:8000';
+
+function tagClass(tag){
+  const m={'ferrari':'tag-ferrari','mclaren':'tag-mclaren','redbull':'tag-redbull','mercedes':'tag-mercedes'};
+  return m[tag]||'tag-other';
+}
+
+function posClass(pos){
+  if(pos===1) return '';
+  if(pos===2) return 'p2';
+  if(pos===3) return 'p3';
+  return 'other';
+}
+
+function renderRace(key){
+  const d = DATA[key];
+
+  // Sidebar meta
+  document.getElementById('meta-circuit').textContent = d.circuit;
+  document.getElementById('meta-country').textContent = d.country;
+  document.getElementById('meta-date').textContent = d.date;
+  document.getElementById('meta-round').textContent = d.round;
+  document.getElementById('meta-laps').textContent = d.laps;
+  document.getElementById('meta-winner').textContent = d.winner;
+  document.getElementById('meta-fastest').textContent = d.fastest;
+  document.getElementById('meta-pits').textContent = d.pits;
+
+  // Podium
+  const top3 = d.result.slice(0,3);
+  const order = [top3[1], top3[0], top3[2]]; // 2,1,3
+  document.getElementById('podium').innerHTML = order.map((r,i)=>`
+    <div class="pod ${r.pos===1?'p1':''}">
+      <div class="pod-pos">${r.pos}</div>
+      <div class="pod-name">${r.driver}</div>
+      <div class="pod-team">${r.team}</div>
+    </div>`).join('');
+
+  // Result table
+  document.getElementById('result-body').innerHTML = d.result.map(r=>`
+    <tr>
+      <td><span class="pos-num ${posClass(r.pos)}">${r.pos}</span></td>
+      <td>${r.driver}</td>
+      <td><span class="team-tag ${tagClass(r.tag)}">${r.team}</span></td>
+    </tr>`).join('');
+
+  // Laps table
+  document.getElementById('laps-body').innerHTML = d.laps.map(r=>`
+    <tr>
+      <td>${r.rank}</td>
+      <td>${r.driver}</td>
+      <td>${r.lap}</td>
+      <td><span class="lap-time">${r.time}</span></td>
+      <td><span class="lap-bar" style="width:${r.pct}px"></span></td>
+    </tr>`).join('');
+
+  // Pit metrics
+  const fastest = d.pitstops.reduce((a,b)=>parseFloat(a.dur)<parseFloat(b.dur)?a:b);
+  document.getElementById('pit-metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">Total Stops</div><div class="metric-val">${d.pitstops.length}</div></div>
+    <div class="metric"><div class="metric-label">Fastest Stop</div><div class="metric-val">${fastest.dur}</div><div class="metric-sub">${fastest.driver}</div></div>
+    <div class="metric"><div class="metric-label">Teams</div><div class="metric-val">${[...new Set(d.pitstops.map(p=>p.team))].length}</div></div>`;
+
+  // Pit table
+  document.getElementById('pits-body').innerHTML = d.pitstops.map(r=>`
+    <tr>
+      <td>${r.driver}</td>
+      <td><span class="team-tag ${tagClass(r.tag)}">${r.team}</span></td>
+      <td>${r.lap}</td>
+      <td>${r.dur}</td>
+    </tr>`).join('');
+
+  // Chips
+  document.getElementById('chips').innerHTML = d.chips.map(c=>`
+    <span class="chip" onclick="setQ('${c}')">${c}</span>`).join('');
+}
+
+function switchRace(key){
+  renderRace(key);
+  document.getElementById('answerBox').classList.remove('visible');
+}
+
+function showTab(id, el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  el.classList.add('active');
+}
+
+function setQ(q){ document.getElementById('askInput').value = q; }
+
+async function askAgent(){
+  const q = document.getElementById('askInput').value.trim();
+  if(!q) return;
+
+  const btn = document.getElementById('askBtn');
+  const spinner = document.getElementById('spinner');
+  const answerBox = document.getElementById('answerBox');
+  const answerText = document.getElementById('answerText');
+  const answerMeta = document.getElementById('answerMeta');
+
+  btn.disabled = true;
+  spinner.classList.add('visible');
+  answerBox.classList.remove('visible');
+
+  try {
+    const resp = await fetch(`${API_URL}/query`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question: q})
+    });
+    const data = await resp.json();
+    answerText.textContent = data.answer;
+    answerMeta.innerHTML = `<span>Input tokens: ${data.input_tokens}</span><span>Output tokens: ${data.output_tokens}</span>`;
+    answerBox.classList.add('visible');
+  } catch(e) {
+    answerText.textContent = 'Agent unavailable — make sure FastAPI is running on localhost:8000 and ANTHROPIC_API_KEY is set.';
+    answerBox.classList.add('visible');
+  }
+
+  btn.disabled = false;
+  spinner.classList.remove('visible');
+}
+
+// Init
+renderRace('monaco');
+</script>
+</body>
+</html>
