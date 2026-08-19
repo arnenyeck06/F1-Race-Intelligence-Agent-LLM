@@ -1,12 +1,17 @@
 # 🏎️ F1 Race Intelligence Agent
 
-> Ask natural-language questions about the 2024 Formula 1 season — powered by real race data, and hybrid RAG search.
+> Ask natural-language questions about the 2024 Formula 1 season — powered by real race data, hybrid RAG search.
+---
+
+## Problem
+
+Formula 1 produces enormous amounts of race data lap times, pit stop windows, tire strategies, driver positionsmbut it is scattered across timing apps, team radio transcripts, and race reports. Fans and analysts who want answers like "who had the fastest lap in Monaco?" or "how did Ferrari's pit strategy compare to Red Bull at Silverstone?" have to dig through multiple sources manually.
+This agent solves that by indexing the full 2024 F1 season into a searchable knowledge base and wrapping it with a Claude AI agent that answers natural-language questions grounded in real data with specific lap times, positions, and pit stop durations cited in every answer.
 
 ---
 
 ## What it does
 
-This agent answers questions about the 2024 F1 season by combining:
 - **Structured race data** (lap times, pit stops, positions) from the OpenF1 API
 - **Hybrid RAG search** over Wikipedia race summaries and F1 regulations
 - **Claude AI** with tool-calling to reason across both data sources
@@ -69,11 +74,18 @@ streamlit run app.py
 ```
 Open **http://localhost:8501** in your browser.
 
-### Optional — Set up Grafana monitoring dashboard
+### Optional — Grafana monitoring dashboard
 ```bash
 python monitoring/setup_grafana.py
 ```
-Open **http://localhost:3001** (admin / admin) to see the monitoring dashboard.
+Open **http://localhost:3001** (admin / admin).
+
+### Optional — Run retrieval and LLM evaluation
+```bash
+python eval/generate_ground_truth.py   # generate Q&A pairs
+python eval/evaluate_retrieval.py      # score keyword vs vector vs hybrid
+python eval/evaluate_llm.py            # score 2 prompt strategies
+```
 
 ---
 
@@ -86,9 +98,9 @@ Open **http://localhost:3001** (admin / admin) to see the monitoring dashboard.
 | 🔧 Pit Stops | All pit stop durations and timing |
 | 💬 Ask Agent | Type any F1 question — Claude answers from real data |
 
-Use the **race selector** in the left sidebar to switch between any of the 30 sessions from the 2024 season.
+Use the **race selector** in the left sidebar to switch between any of the 30 sessions.
 
-To ask a question: click the **💬 Ask Agent** tab → type your question or pick an example → click **ASK AGENT**.
+To ask a question: click **💬 Ask Agent** → type your question or pick an example → click **ASK AGENT**.
 
 ---
 
@@ -106,10 +118,11 @@ Wikipedia API ────────────────→ pgvector (race
                                         ↓
                         Claude Agent (tool-calling loop)
                                         ↓
-                        Streamlit UI + FastAPI
+                        Streamlit UI
                                         ↓
                         Grafana Monitoring Dashboard
 ```
+
 ---
 
 ## Stack
@@ -125,7 +138,7 @@ Wikipedia API ────────────────→ pgvector (race
 | Re-ranking | Cosine similarity reranker |
 | Query rewriting | Rule-based + LLM expansion |
 | LLM | Claude Sonnet |
-| Interface | Streamlit + FastAPI |
+| Interface | Streamlit |
 | Orchestration | Kestra (weekly race ingestion DAG) |
 | Monitoring | Grafana (5-panel dashboard) |
 | Containerization | Docker Compose |
@@ -134,7 +147,7 @@ Wikipedia API ────────────────→ pgvector (race
 
 ## Data sources
 
-All data is free and publicly available — no special access needed:
+All data is free and publicly available:
 - [OpenF1 API](https://openf1.org) — live and historical F1 race data
 - [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) — race summaries and regulations
 
