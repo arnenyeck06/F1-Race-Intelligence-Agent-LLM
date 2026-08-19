@@ -110,27 +110,6 @@ Wikipedia API ────────────────→ pgvector (race
                                         ↓
                         Grafana Monitoring Dashboard
 ```
-
----
-
-## Rubric compliance
-
-| Criteria | Implementation | Score |
-|---|---|---|
-| Problem description | Clear problem + solution in README | 2/2 |
-| Retrieval flow | pgvector KB + Claude agent tool-calling | 2/2 |
-| Retrieval evaluation | Ground truth eval — keyword vs vector vs hybrid | 2/2 |
-| LLM evaluation | 2 prompts evaluated with LLM-as-judge | 2/2 |
-| Interface | Streamlit UI + FastAPI | 2/2 |
-| Ingestion pipeline | Kestra DAG (scheduled post-race ingestion) | 2/2 |
-| Monitoring | User feedback + Grafana dashboard (5 charts) | 2/2 |
-| Containerization | Full docker-compose (Postgres, Grafana) | 2/2 |
-| Reproducibility | Clear README, public data, pinned deps | 2/2 |
-| Hybrid search | minsearch + pgvector + RRF | 1/1 |
-| Document re-ranking | Cosine reranker on top-10 chunks | 1/1 |
-| Query rewriting | F1 domain term expansion + LLM rewrite | 1/1 |
-| **Total** | | **21/21** |
-
 ---
 
 ## Stack
