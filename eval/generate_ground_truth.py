@@ -1,6 +1,10 @@
 """
+generate_ground_truth.py
 Generate ground truth Q&A pairs for retrieval evaluation.
 Uses Claude to generate 3 questions per sampled chunk.
+
+Usage:
+  python eval/generate_ground_truth.py
 """
 
 import json
@@ -50,12 +54,9 @@ def main():
     sampled = random.sample(chunks, min(SAMPLE_CHUNKS, len(chunks)))
     print(f"Generating questions for {len(sampled)} chunks...")
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise EnvironmentError("ANTHROPIC_API_KEY not set.")
-    client = anthropic.Anthropic(api_key=api_key)
-
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     ground_truth = []
+
     for i, chunk in enumerate(sampled):
         print(f"[{i+1}/{len(sampled)}] {chunk['source'][:50]}")
         questions = generate_questions(chunk, client)
