@@ -1,6 +1,6 @@
 # 🏎️ F1 Race Intelligence Agent
 
-> Ask natural-language questions about the 2024 Formula 1 season — powered by OpenF1 data, hybrid RAG search, and Claude AI.
+> Ask natural-language questions about the 2024 Formula 1 season — powered by OpenF1 data, hybrid RAG search.
 
 ---
 
